@@ -43,7 +43,7 @@ Each pattern is implemented in its own file under `patterns/` and contains:
 
 ### Creational Patterns
 
-- `factory-method.js` – Factory Method Pattern
+- `factory.js` – Factory Method Pattern
 - `singleton.js` – Singleton Pattern
 - `builder.js` – Builder Pattern
 - `prototype.js` – Prototype Pattern
