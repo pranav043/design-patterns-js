@@ -2,113 +2,71 @@
  * Pattern: State
  *
  * Problem:
- *  An object behaves differently based on its internal state, leading to
- *  lots of if/else or switch statements scattered everywhere.
+ *   Handling async request states often leads to messy if/else logic:
+ *   if (status === 'loading') ..., if (status === 'error') ...
  *
  * Solution:
- *  Represent each state as a separate object with its own behavior,
- *  and delegate behavior to the current state.
+ *   Use a small state machine: state + event → newState.
+ *   Everything is in one place, no repeated checks.
  *
  * When to use:
- *  - UI flows with states (idle, loading, success, error)
- *  - Workflows, wizards, games, request lifecycles
+ *   - Idle/Loading/Success/Error UIs
+ *   - Fetch states in React/Node
+ *   - Any logic with repeated status checks
  */
 
-class IdleState {
-  constructor(ctx) {
-    this.ctx = ctx;
-  }
-  fetch() {
-    console.log("Fetching...");
-    this.ctx.setState(this.ctx.loadingState);
-    this.ctx.performFetch();
+const initialState = { status: "idle", data: null, error: null };
+
+function transition(state, event) {
+  switch (event.type) {
+    case "FETCH":
+      return { status: "loading", data: null, error: null };
+    case "SUCCESS":
+      return { status: "success", data: event.data, error: null };
+    case "ERROR":
+      return { status: "error", data: null, error: event.error };
+    default:
+      return state;
   }
 }
 
-class LoadingState {
-  constructor(ctx) {
-    this.ctx = ctx;
+export function createRequest(fetchFn) {
+  let state = { ...initialState };
+
+  async function run() {
+    state = transition(state, { type: "FETCH" });
+    console.log("STATE:", state);
+
+    try {
+      const data = await fetchFn();
+      state = transition(state, { type: "SUCCESS", data });
+    } catch (error) {
+      state = transition(state, { type: "ERROR", error });
+    }
+
+    console.log("STATE:", state);
   }
-  fetch() {
-    console.log("Already loading. Ignoring extra fetch call.");
+
+  function getState() {
+    return state;
   }
-  success(data) {
-    this.ctx.data = data;
-    this.ctx.setState(this.ctx.successState);
-  }
-  error(err) {
-    this.ctx.error = err;
-    this.ctx.setState(this.ctx.errorState);
-  }
+
+  return { run, getState };
 }
 
-class SuccessState {
-  constructor(ctx) {
-    this.ctx = ctx;
-  }
-  fetch() {
-    console.log("Refetching from success state...");
-    this.ctx.setState(this.ctx.loadingState);
-    this.ctx.performFetch();
-  }
-}
+// ---------------- Example ----------------
 
-class ErrorState {
-  constructor(ctx) {
-    this.ctx = ctx;
-  }
-  fetch() {
-    console.log("Retrying after error...");
-    this.ctx.setState(this.ctx.loadingState);
-    this.ctx.performFetch();
-  }
-}
-
-export class RequestContext {
-  constructor(fetchFn) {
-    this.fetchFn = fetchFn;
-    this.data = null;
-    this.error = null;
-
-    this.idleState = new IdleState(this);
-    this.loadingState = new LoadingState(this);
-    this.successState = new SuccessState(this);
-    this.errorState = new ErrorState(this);
-
-    this.state = this.idleState;
-  }
-
-  setState(state) {
-    this.state = state;
-  }
-
-  fetch() {
-    this.state.fetch();
-  }
-
-  performFetch() {
-    this.fetchFn()
-      .then((data) => this.state.success?.(data))
-      .catch((err) => this.state.error?.(err));
-  }
-}
-
-// Example usage:
 function fakeApi() {
   return new Promise((resolve, reject) => {
     setTimeout(() => {
-      // 70% chance of success
-      if (Math.random() < 0.7) resolve({ message: "OK" });
-      else reject(new Error("Random failure"));
-    }, 200);
+      Math.random() < 0.7 ? resolve({ msg: "Done" }) : reject(new Error("Network error"));
+    }, 300);
   });
 }
 
-function demoState() {
-  const request = new RequestContext(fakeApi);
-  request.fetch();
-
-  // After some time you could call request.fetch() again to refetch/ retry
+function demo() {
+  const req = createRequest(fakeApi);
+  req.run(); // idle → loading → success/error
 }
 
-// demoState();
+demo();
